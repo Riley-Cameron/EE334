@@ -195,6 +195,7 @@ guess_p EQU 0x20 ;2 bytes 0x20-0x21
 black_count EQU 0x22
 white_count EQU 0x23
 loop EQU 0x21
+mod6 EQU 0x24
  
 ;SFRs
 TMR0H EQU 0x0D7
@@ -204,7 +205,7 @@ PORTA EQU 0x80
  
 ;define constants
 unpack_mask EQU 0FH
-rand_mask EQU b'01110111'
+rand_mask EQU b'01111111'
 a EQU 0
  
 ;init variables and call subroutines
@@ -229,33 +230,34 @@ WAIT	MOVF PORTA,W,a
 	ANDLW b'00010000'
 	NOP ;avoid all even #s
 	BZ WAIT
-PB_DOWN	MOVF PORTA,W,a
+	MOVF TMR0L,W,a ;store time
+	MOVWF CODE1
+	MOVF TMR0H,W,a
+	MOVWF CODE1 + 1
+PB_DOWN	MOVF PORTA,W,a ;wait for button release
 	ANDLW b'00010000'
 	NOP
 	BNZ PB_DOWN
+	MOVF TMR0L,W,a
+	MOVWF CODE1 + 2
+	MOVF TMR0H,W,a
+	MOVWF CODE1 + 3
 	CALL RAND 
-	
-	
-	MOVFF CODE_P,unpack_i
-	CALL UNPACK
-	MOVFF unpack_oH,CODE1
-	MOVFF unpack_oL,CODE1 + 1
-	MOVFF CODE_P + 1,unpack_i
-	CALL UNPACK
-	MOVFF unpack_oH,CODE1 + 2
-	MOVFF unpack_oL,CODE1 + 3
-	
+		
 	CALL BLK_CNT
 	GOTO $
 
 ;Random code generator subroutine
-RAND	MOVF TMR0L,W,a
-	ANDLW rand_mask
-	MOVWF CODE_P
-	MOVF TMR0H,W,a
-	ANDLW rand_mask
-	MOVWF CODE_P + 1
-	;TODO: filter out 7 & 6
+RAND	
+	local i
+	i=0
+	while i < 4
+	    MOVF CODE1 + i,W
+	    ANDLW rand_mask
+	    CALL MOD6
+	    MOVWF CODE1 + i
+	i++
+	endw
 	RETURN
 	
 ;PACK subroutine
@@ -291,22 +293,20 @@ BLK_CNT	MOVLW 00H
 ;WT_CNT subroutine
 WT_CNT	MOVLW 00H
 	MOVWF white_count
-	local j
+	local i
 	i = 0
-	j = 0
 	while i < 4
 	    
-	while j < 4
-	if j != i
-	
-	
-	endif
-	j++
-	endw
 	i++
 	endw
-	
 	RETURN
 	
-                           
+	
+	
+MOD6	MOVWF mod6
+	ADDLW -6H
+	BNN MOD6
+	MOVF mod6,W
+	RETURN
+	
     END
