@@ -195,13 +195,15 @@ guess_p EQU 0x20 ;2 bytes 0x20-0x21
 black_count EQU 0x22
 white_count EQU 0x23
 mod6 EQU 0x24
+loop_var EQU 0x25 
  
 ;SFRs
-TMR0H EQU 0x0D7 ;timer0 high byte
-TMR0L EQU 0x0D6 ;timer0 low byte
-T0CON EQU 0x0D5 ;timer0 control
-PORTA EQU 0x80 ;SW2 button (RA4 = PORTA[4})
-BSR   EQU 0x0E0 ;bank select register
+TMR0H EQU 0xFD7 ;timer0 high byte
+TMR0L EQU 0xFD6 ;timer0 low byte
+T0CON EQU 0xFD5 ;timer0 control
+PORTA EQU 0xF80 ;SW2 button (RA4 = PORTA[4})
+BSR   EQU 0xFE0 ;bank select register
+WREG  EQU 0xFE8 ;working register
  
 ;define constants
 unpack_mask EQU 0FH
@@ -212,7 +214,7 @@ b EQU 1 ;use BSR
  
 ;init variables and call subroutines
 	CLRF BSR,a
-	MOVLW 03H	;temporary guess will be 3333
+	MOVLW 03H	;TEMPORARY GUESS will be 3333
 	MOVWF GUESS 
 	INCF BSR,F,a	;increment banks to get each value in array
 	MOVWF GUESS,b	;BSR = 1
@@ -253,13 +255,14 @@ PB_DOWN	MOVF PORTA,W,a	    ;wait for button release to get 2 more code #s
 	CALL RAND	    ;convert code digits from 0-255 into 0-5 range
 		
 	CALL BLK_CNT	    ;count exact matches
+	CALL WT_CNT
 	GOTO $
 
 ;Random code generator subroutine
 RAND	MOVLW 03H
 	MOVWF BSR,a	    ;start at bank 3
 RAND_L	MOVF CODES,W,b
-	ANDLW rand_mask	    ;filter out negative values (range is now 0-127)
+	;ANDLW rand_mask	    ;filter out negative values (range is now 0-127)
 	CALL MOD6	    ;perform a %6 on the code value
 	MOVWF CODES,b	    ;update the code value
 	DECF BSR,F,a 
@@ -285,33 +288,50 @@ UNPACK	MOVF unpack_i,W	    ;move input into WREG (I = 0xHL)
 	
 ;BLK_CNT subroutine
 BLK_CNT	MOVLW 00H
-	MOVWF black_count
+	MOVWF black_count   ;start black count at 0
 	MOVLW 03H
-	MOVWF BSR,a
-BC_LOOP	MOVF CODES,W,b
-	CPFSEQ GUESS,b
-	GOTO DEC_BSR
-	INCF black_count
-	MOVLW 06H
-	MOVWF GUESS,b
-DEC_BSR	DECF BSR,F,a
-	BNN BC_LOOP
+	MOVWF BSR,a	    ;set bank to 3: loop throug array of codes in reverse order
+BC_LOOP	MOVF CODES,W,b	    ;read code at index of  BSR
+	CPFSEQ GUESS,b	    ;compare code and guess
+	BRA DEC_BSR	    ;if they aren't equal, skip next 3 instructions
+	INCF black_count    ;if equal:	add one to black count
+	MOVLW 0F0H			;change matched guess to FX so 
+	ADDWF GUESS,F,b			;it wont be matched in WT_CNT
+DEC_BSR	DECF BSR,F,a	    ;decrement BSR to loop through each index
+	BNN BC_LOOP	    ;if BSR is negative, break the loop
 	CLRF BSR,a
 	RETURN
 
 ;WT_CNT subroutine
 WT_CNT	MOVLW 00H
-	MOVWF white_count
-	
+	MOVWF white_count   ;start black count at 0
+	MOVLW 03H
+	MOVWF loop_var	    ;set bank to 3: loop throug array of codes in reverse order
+WT_LP1 MOVF CODES,W,b
+WT_LP2             ;read code at index of  BSR
+	CPFSEQ GUESS,b	    ;compare code and guess
+	BRA DEC_BSR	    ;if they aren't equal, skip next 3 instructions
+	INCF black_count    ;if equal:	add one to black count
+	MOVLW 0F0H			;change matched guess to FX so 
+	ADDWF GUESS,F,b			;it wont be matched in WT_CNT
+DEC_BSR	DECF BSR,F,a	    ;decrement BSR to loop through each index
+	BNN WT_LOOP	    ;if BSR is negative, break the loop
+	CLRF BSR,a
+	RETURN
 	
 	RETURN
 	
 	
-	
-MOD6	MOVWF mod6
-	ADDLW -6H
-	BNN MOD6
-	MOVF mod6,W
+;MOD6 subroutine that calculates %6 of the value in WREG
+MOD6	MOVF WREG,W,a
+	BNN MOD6_L2
+MOD6_L1 MOVWF mod6	;L1 is used if the number starts as negative
+	ADDLW -6H	
+	BN MOD6_L1	
+MOD6_L2	MOVWF mod6	;store previous value
+	ADDLW -6H	;subtract 6 from current value
+	BNN MOD6_L2	;if its negative, return prev value; else, keep looping
+	MOVF mod6,W	;move prev value to wreg and return
 	RETURN
 	
     END
