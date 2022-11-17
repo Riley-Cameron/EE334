@@ -196,6 +196,8 @@ black_count EQU 0x22
 white_count EQU 0x23
 mod6 EQU 0x24
 loop_var EQU 0x25 
+CNST3 EQU 0x26
+temp EQU 0x27
  
 ;SFRs
 TMR0H EQU 0xFD7 ;timer0 high byte
@@ -214,15 +216,18 @@ b EQU 1 ;use BSR
  
 ;init variables and call subroutines
 	CLRF BSR,a
-	MOVLW 03H	;TEMPORARY GUESS will be 3333
+	MOVLW 03H	;TEMPORARY GUESS will be 3322
 	MOVWF GUESS 
 	INCF BSR,F,a	;increment banks to get each value in array
 	MOVWF GUESS,b	;BSR = 1
+	MOVLW 02H
 	INCF BSR,F,a
 	MOVWF GUESS,b	;BSR = 2
 	INCF BSR,F,a
 	MOVWF GUESS,b	;BSR = 3
 	CLRF BSR,a	;BSR = 0
+	MOVLW 3
+	MOVWF CNST3
 	
 	;init Timer 0
 	MOVLW 00H	; load timer with 0000H
@@ -295,8 +300,10 @@ BC_LOOP	MOVF CODES,W,b	    ;read code at index of  BSR
 	CPFSEQ GUESS,b	    ;compare code and guess
 	BRA DEC_BSR	    ;if they aren't equal, skip next 3 instructions
 	INCF black_count    ;if equal:	add one to black count
-	MOVLW 0F0H			;change matched guess to FX so 
+	MOVLW 0B0H			;mark matched guess and code with BX and AX so 
 	ADDWF GUESS,F,b			;it wont be matched in WT_CNT
+	MOVLW 0A0H
+	ADDWF CODES,F,b
 DEC_BSR	DECF BSR,F,a	    ;decrement BSR to loop through each index
 	BNN BC_LOOP	    ;if BSR is negative, break the loop
 	CLRF BSR,a
@@ -307,17 +314,23 @@ WT_CNT	MOVLW 00H
 	MOVWF white_count   ;start black count at 0
 	MOVLW 03H
 	MOVWF loop_var	    ;set bank to 3: loop throug array of codes in reverse order
-WT_LP1 MOVF CODES,W,b
-WT_LP2             ;read code at index of  BSR
-	CPFSEQ GUESS,b	    ;compare code and guess
-	BRA DEC_BSR	    ;if they aren't equal, skip next 3 instructions
-	INCF black_count    ;if equal:	add one to black count
-	MOVLW 0F0H			;change matched guess to FX so 
-	ADDWF GUESS,F,b			;it wont be matched in WT_CNT
-DEC_BSR	DECF BSR,F,a	    ;decrement BSR to loop through each index
-	BNN WT_LOOP	    ;if BSR is negative, break the loop
+WT_LP1	MOVFF loop_var,BSR
+	MOVF GUESS,W,b
+	MOVFF CNST3,BSR
+WT_LP2  CPFSEQ CODES,b	    ;compare code and guess
+	BRA BSR_DEC	    ;if they aren't equal, skip next 3 instructions
+	INCF white_count    ;if equal:	add one to white count
+	MOVLW 0C0H
+	ADDWF CODES,F,b
+	MOVFF loop_var,BSR
+	MOVLW 0E0H	    ;change matched guess to EX so 
+	ADDWF GUESS,F,b
+	CLRF BSR,a	    ;
+BSR_DEC	DECF BSR,F,a	    ;decrement BSR to loop through each index
+	BNN WT_LP2	    ;if BSR is negative, break the loop
 	CLRF BSR,a
-	RETURN
+	DECF loop_var	    ;decrement outer loop variable
+	BNN WT_LP1	    ;keep looping until loop_var is -1
 	
 	RETURN
 	
