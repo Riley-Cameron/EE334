@@ -182,108 +182,161 @@ MAIN_PROG CODE                      ; let linker place main program
 START
 
 ;define variables
-CODES EQU 0x00 ;store in banks 0-3, 0x00
-GUESS EQU 0x01 ;store in banks 0-3, 0x01
+ 
+CODES EQU 0x100 ;store in bank 1 starting at 0x00
+ 
+;each row of GUESS is: 0 = GUESS1, 1 = GUESS2, 2 = GUESS3, 3 = GUESS4, 
+;4 = GUESS_PACKEDH, 5 = GUESS_PACKEDL, 7 = BLK_CNT, 8 = WT_CNT
+GUESS EQU 0x110 ;store in bank 1 starting at 0x10; next guess is at 0x20,0x30 etc
+ 
+;index constants:
+GUESS_P EQU 4	;0x1X4 and 0x1X5
+black_count EQU 7   ;0x1X6
+white_count EQU 8   ;0x1X7
+
+;scratch pad
 pack_iL EQU 0x10
 pack_iH EQU 0x11
 pack_o EQU 0x12
 unpack_i EQU 0x13
 unpack_oL EQU 0x14
 unpack_oH EQU 0x15
-CODE_P EQU 0x16 ;2 bytes 0x16-0x17
-guess_p EQU 0x20 ;2 bytes 0x20-0x21
-black_count EQU 0x22
-white_count EQU 0x23
-mod6 EQU 0x24
-loop_var EQU 0x25 
-CNST3 EQU 0x26
-temp EQU 0x27
+CNST5 EQU 0x16
  
 ;SFRs
-TMR0H EQU 0xFD7 ;timer0 high byte
-TMR0L EQU 0xFD6 ;timer0 low byte
-T0CON EQU 0xFD5 ;timer0 control
-PORTA EQU 0xF80 ;SW2 button (RA4 = PORTA[4})
+PORTA EQU 0xF80 ;SW2 button (RA4 = PORTA[4])
+TRISA EQU 0xF92	;set I/O of portA
 BSR   EQU 0xFE0 ;bank select register
 WREG  EQU 0xFE8 ;working register
+FSR0L EQU 0xFE9	;Low byte of file select register 0
+INDF0 EQU 0xFEF	;indirect file register 0
+FSR1L EQU 0xFE1
+INDF1 EQU 0xFE7
  
 ;define constants
 unpack_mask EQU 0FH
-rand_mask EQU b'01111111'
 a EQU 0 ;use access bank
 F EQU 1 ;File is destination
 b EQU 1 ;use BSR
  
 ;init variables and call subroutines
-	CLRF BSR,a
-	MOVLW 03H	;TEMPORARY GUESS will be 3322
-	MOVWF GUESS 
-	INCF BSR,F,a	;increment banks to get each value in array
-	MOVWF GUESS,b	;BSR = 1
-	MOVLW 02H
-	INCF BSR,F,a
-	MOVWF GUESS,b	;BSR = 2
-	INCF BSR,F,a
-	MOVWF GUESS,b	;BSR = 3
-	CLRF BSR,a	;BSR = 0
-	MOVLW 3
-	MOVWF CNST3
+	LFSR 0,GUESS
+INIT_GUESSES
+	MOVLW GUESS_P	;FSR0 starts at 0x110 so add GUESS_P (4) to access the high byte of the packed guess
+	ADDWF FSR0L,F,a	
+	MOVLW 33H	;TEMPORARY GUESS will be 3322 (for all 12)
+	MOVWF INDF0,a
+	INCF FSR0L,F,a
+	MOVLW 22H
+	MOVWF INDF0,a
+	BCF FSR0L,0,a	;clear the lower hex digit of FSR0L (0xXX -> 0xX0)
+	BCF FSR0L,2,a
+	CALL UNPACK_GUESS   ;this subroutine unpacks both bytes of a packed guess
+	MOVLW 10H
+	ADDWF FSR0L,F,a	;increment FSR0 by 10H to access next guess (move down by one row of file registers)
+	MOVF FSR0L,W,a
+	SUBLW 0D0H
+	BNZ INIT_GUESSES
 	
-	;init Timer 0
-	MOVLW 00H	; load timer with 0000H
-	MOVWF TMR0H,a
-	MOVWF TMR0L,a
-	MOVLW b'10001000';timer control: ON,16bit,internal CLK,no prescaler
-	MOVWF T0CON,a
+	MOVLW 5
+	MOVWF CNST5	;set CNST5 to 5
 	
-;wait for button
-WAIT	MOVF PORTA,W,a	    ;move porta to wreg
-	ANDLW b'00010000'   ;filter out button bit
-	NOP		    ;avoid all even #s on timer0
-	BZ WAIT
-	MOVF TMR0L,W,a	    ;store timer0 low byte in CODES[0]
-	MOVWF CODES
-	MOVF TMR0H,W,a	    ;store in CODES[1]
-	INCF BSR,F,a
-	MOVWF CODES,b
-PB_DOWN	MOVF PORTA,W,a	    ;wait for button release to get 2 more code #s
+	MOVLW 0FFH
+	MOVWF TRISA,a
+	
+;start counter loop for random code, loop ends when button is pressed
+	LFSR 0,CODES ; each loop in the nest increments one CODE digit (starts at CODE1)
+LOOP1
+	INCF FSR0L,F,a	    ;increment FSR0 to access CODE2
+LOOP2
+	    INCF FSR0L,F,a	;increment FSR0 to access CODE3
+LOOP3
+		    INCF FSR0L,F,a	;increment FSR0 to access CODE4
+LOOP4
+		    MOVF PORTA,W,a	;check if the button has been pressed
+		    ANDLW b'00010000'
+		    BNZ PRESSED		;if its pressed, exit the loop
+		    MOVF INDF0,F,a
+		    BZ L4		;check if loop variable is 0, if it is jump to L4
+		    DECF INDF0,F,a	;if not 0, decrement loop var and continue looping
+		    BRA LOOP4
+L4		    MOVFF CNST5,INDF0	;L4: set loop var back to 5
+		    DECF FSR0L,F,a	;decrement FSR0 to access CODE3
+		MOVF INDF0,a
+		BZ L3
+		DECF INDF0,F,a
+		BRA LOOP3
+L3		MOVFF CNST5,INDF0
+		DECF FSR0L,F,a	    ;decrement FSR0 to access CODE2
+	    MOVF INDF0,a
+	    BZ L2
+	    DECF INDF0,F,a
+	    BRA LOOP2
+L2	    MOVFF CNST5,INDF0
+	    DECF FSR0L,F,a	;decrement FSR0 to access CODE1
+	MOVF INDF0,a
+	BZ L1
+	DECF INDF0,F,a
+	BRA LOOP1
+L1	MOVFF CNST5,INDF0
+	BRA LOOP1
+	
+PRESSED
+	MOVF PORTA,W,a	    ;wait for button release to start the game
 	ANDLW b'00010000'
-	NOP
-	BNZ PB_DOWN
-	MOVF TMR0L,W,a	    ;store in CODES[2]
-	INCF BSR,F,a
-	MOVWF CODES,b
-	MOVF TMR0H,W,a	    ;store in CODES[3]
-	INCF BSR,F,a
-	MOVWF CODES,b
-	CLRF BSR,a
-	CALL RAND	    ;convert code digits from 0-255 into 0-5 range
-		
+	BNZ PRESSED
+	
+;main game loop:
+	LFSR 0,GUESS	
+MAIN_LOOP
 	CALL BLK_CNT	    ;count exact matches
-	CALL WT_CNT
+	CALL WT_CNT	    ;count color matches
+	CALL CLEAN_CODE	    ;clean markers off the CODE
+	MOVLW 10H
+	ADDWF FSR0L,F,a	    ;increment to next guess
+	MOVF FSR0L,W,a
+	SUBLW 0D0H	    ;check if loop is at 12 yet (0CH)
+	BNZ MAIN_LOOP	    ;break after 12 iterations
+	
+	;see bank 0 for code and processed guesses
 	GOTO $
 
-;Random code generator subroutine
-RAND	MOVLW 03H
-	MOVWF BSR,a	    ;start at bank 3
-RAND_L	MOVF CODES,W,b
-	;ANDLW rand_mask	    ;filter out negative values (range is now 0-127)
-	CALL MOD6	    ;perform a %6 on the code value
-	MOVWF CODES,b	    ;update the code value
-	DECF BSR,F,a 
-	BNN RAND_L	    ;if BSR value is negative break the loop
-	CLRF BSR,a
-	RETURN
 	
 ;PACK subroutine
-PACK	MOVFF pack_iL,pack_o ;put the low byte into pack_output (O = 0x0L)
+PACK
+	MOVFF pack_iL,pack_o ;put the low byte into pack_output (O = 0x0L)
 	SWAPF pack_iH	    ;swap nibbles of high byte (H = 0xH0)
 	MOVF pack_iH,W
 	ADDWF pack_o,F	    ;add high byte to output (O = 0xHL)
 	RETURN
+
+;subroutine unpacks the guess in the current FSR line
+UNPACK_GUESS
+	MOVLW GUESS_P
+	ADDWF FSR0L,F,a
+	MOVFF INDF0,unpack_i
+	CALL UNPACK
+	MOVLW -4H
+	ADDWF FSR0L,F,a
+	MOVFF unpack_oH,INDF0
+	INCF FSR0L,F,a	
+	MOVFF unpack_oL,INDF0
+	MOVLW 4H
+	ADDWF FSR0L,F,a
+	MOVFF INDF0,unpack_i
+	CALL UNPACK
+	MOVLW -3H
+	ADDWF FSR0L,F,a
+	MOVFF unpack_oH,INDF0
+	INCF FSR0L,F,a	
+	MOVFF unpack_oL,INDF0
+	BCF FSR0L,0,a
+	BCF FSR0L,1,a
+	RETURN
 	
 ;UNPACK subroutine
-UNPACK	MOVF unpack_i,W	    ;move input into WREG (I = 0xHL)
+UNPACK
+	MOVF unpack_i,W	    ;move input into WREG (I = 0xHL)
 	ANDLW unpack_mask   ;mask gets only lower nibble
 	MOVWF unpack_oL	    ;store value in output low register (0x0L)
 	SWAPF unpack_i,W    ;swap nibbles in input (I = 0xLH)
@@ -292,59 +345,77 @@ UNPACK	MOVF unpack_i,W	    ;move input into WREG (I = 0xHL)
 	RETURN
 	
 ;BLK_CNT subroutine
-BLK_CNT	MOVLW 00H
+BLK_CNT
+	MOVLW 00H
 	MOVWF black_count   ;start black count at 0
-	MOVLW 03H
-	MOVWF BSR,a	    ;set bank to 3: loop throug array of codes in reverse order
-BC_LOOP	MOVF CODES,W,b	    ;read code at index of  BSR
-	CPFSEQ GUESS,b	    ;compare code and guess
-	BRA DEC_BSR	    ;if they aren't equal, skip next 3 instructions
+	LFSR 1,CODES
+BC_LOOP	MOVF INDF0,W,a	    ;read code at index of loop
+	CPFSEQ INDF1,a	    ;compare code and guess
+	BRA DEC_LOOP	    ;if they aren't equal, skip next 3 instructions
 	INCF black_count    ;if equal:	add one to black count
 	MOVLW 0B0H			;mark matched guess and code with BX and AX so 
-	ADDWF GUESS,F,b			;it wont be matched in WT_CNT
+	ADDWF INDF0,F,a			;it wont be matched in WT_CNT
 	MOVLW 0A0H
-	ADDWF CODES,F,b
-DEC_BSR	DECF BSR,F,a	    ;decrement BSR to loop through each index
-	BNN BC_LOOP	    ;if BSR is negative, break the loop
-	CLRF BSR,a
+	ADDWF INDF1,F,a
+DEC_LOOP
+	INCF FSR0L,F,a
+	INCF FSR1L,F,a	    ;increment FSR1 and FSR0 to loop through each index
+	MOVLW 3H
+	CPFSGT FSR1L,a
+	BRA BC_LOOP	    ;break the loop after all 4 digits are compared
+	MOVLW 0F0H
+	ANDWF FSR0L,F,a
+	MOVLW black_count
+	ADDWF FSR0L,F,a
+	MOVFF black_count,INDF0
+	BCF FSR0L,0,a
+	BCF FSR0L,1,a
+	BCF FSR0L,2,a
 	RETURN
 
 ;WT_CNT subroutine
-WT_CNT	MOVLW 00H
-	MOVWF white_count   ;start black count at 0
-	MOVLW 03H
-	MOVWF loop_var	    ;set bank to 3: loop throug array of codes in reverse order
-WT_LP1	MOVFF loop_var,BSR
-	MOVF GUESS,W,b
-	MOVFF CNST3,BSR
-WT_LP2  CPFSEQ CODES,b	    ;compare code and guess
-	BRA BSR_DEC	    ;if they aren't equal, skip next 3 instructions
+WT_CNT
+	MOVLW 00H
+	MOVWF white_count   ;start white count at 0
+	LFSR 1,CODES
+	MOVLW 4H
+	ADDWF FSR0L
+WT_LP1	DECF FSR0L,F,a	    ;decrement outer loop variable
+	MOVLW 4H
+	MOVWF FSR1L
+	MOVF INDF0,W,a
+WT_LP2  DECF FSR1L,F,a	    ;decrement FSR1 to loop through each index of CODE
+	CPFSEQ INDF1,a	    ;compare code and guess
+	BRA CONT_L	    ;if they aren't equal, skip next 3 instructions and continue looping
 	INCF white_count    ;if equal:	add one to white count
-	MOVLW 0C0H
-	ADDWF CODES,F,b
-	MOVFF loop_var,BSR
-	MOVLW 0E0H	    ;change matched guess to EX so 
-	ADDWF GUESS,F,b
-	CLRF BSR,a	    ;
-BSR_DEC	DECF BSR,F,a	    ;decrement BSR to loop through each index
-	BNN WT_LP2	    ;if BSR is negative, break the loop
-	CLRF BSR,a
-	DECF loop_var	    ;decrement outer loop variable
-	BNN WT_LP1	    ;keep looping until loop_var is -1
-	
+	MOVLW 0C0H	    ;change code to CX so it wont be matched again
+	ADDWF INDF1,F,a
+	MOVLW 0E0H	    ;change matched guess to EX so it wont be matched twice
+	ADDWF INDF0,F,a
+	MOVLW 0F0H
+	ANDWF FSR1L,F,a
+CONT_L	MOVF FSR1L,F,a
+	BNZ WT_LP2
+	MOVF FSR0L,W,a
+	ANDLW 0FH
+	BNZ WT_LP1	    ;keep looping until GUESS address is 0
+	MOVLW white_count
+	ADDWF FSR0L,F,a
+	MOVFF white_count,INDF0
+	MOVLW 0F0H
+	ANDWF FSR0L,F,a
 	RETURN
 	
-	
-;MOD6 subroutine that calculates %6 of the value in WREG
-MOD6	MOVF WREG,W,a
-	BNN MOD6_L2
-MOD6_L1 MOVWF mod6	;L1 is used if the number starts as negative
-	ADDLW -6H	
-	BN MOD6_L1	
-MOD6_L2	MOVWF mod6	;store previous value
-	ADDLW -6H	;subtract 6 from current value
-	BNN MOD6_L2	;if its negative, return prev value; else, keep looping
-	MOVF mod6,W	;move prev value to wreg and return
+;CLEAN_CODE subroutine clear marks off of the code
+CLEAN_CODE
+	LFSR 1,CODES+4
+CLEAN_LOOP
+	DECF FSR1L,F,a
+	MOVLW 0FH
+	ANDWF INDF1,F,a
+	MOVF FSR1L
+	BNZ CLEAN_LOOP
 	RETURN
+	
 	
     END
