@@ -71,6 +71,7 @@
 ;*******************************************************************************
 
 ; TODO INSERT INCLUDE CODE HERE
+#include p18f46k22.inc
 
 ;*******************************************************************************
 ;
@@ -196,12 +197,16 @@ white_count EQU 8   ;0x1X7
 
 ;scratch pad
 pack_iL EQU 0x10
-pack_iH EQU 0x11
-pack_o EQU 0x12
-unpack_i EQU 0x13
-unpack_oL EQU 0x14
-unpack_oH EQU 0x15
-CNST5 EQU 0x16
+pack_iH EQU 0x11	;high and low inputs to PACK
+pack_o EQU 0x12		;output of PACK
+unpack_i EQU 0x13	;input of UNPACK
+unpack_oL EQU 0x14	
+unpack_oH EQU 0x15	;high and low outputs of UNPACK
+CNST5 EQU 0x16		;constant 5, used for random number counter
+pot_val EQU 0x17	;A-D conversion of potentiometer signal (2-bytes)
+display_digit EQU 0x19	;value to be displayed
+prev_dd EQU 0x20	;previous display value (used to check if the display should be updated)
+loop_var EQU 0x21	;general loop index 
  
 ;SFRs
 PORTA EQU 0xF80 ;SW2 button (RA4 = PORTA[4])
@@ -218,31 +223,42 @@ unpack_mask EQU 0FH
 a EQU 0 ;use access bank
 F EQU 1 ;File is destination
 b EQU 1 ;use BSR
- 
-;init variables and call subroutines
-	LFSR 0,GUESS
-INIT_GUESSES
-	MOVLW GUESS_P	;FSR0 starts at 0x110 so add GUESS_P (4) to access the high byte of the packed guess
-	ADDWF FSR0L,F,a	
-	MOVLW 33H	;TEMPORARY GUESS will be 3322 (for all 12)
-	MOVWF INDF0,a
-	INCF FSR0L,F,a
-	MOVLW 22H
-	MOVWF INDF0,a
-	BCF FSR0L,0,a	;clear the lower hex digit of FSR0L (0xXX -> 0xX0)
-	BCF FSR0L,2,a
-	CALL UNPACK_GUESS   ;this subroutine unpacks both bytes of a packed guess
-	MOVLW 10H
-	ADDWF FSR0L,F,a	;increment FSR0 by 10H to access next guess (move down by one row of file registers)
-	MOVF FSR0L,W,a
-	SUBLW 0D0H
-	BNZ INIT_GUESSES
+
+;clear RAM (Bank 0 & 1)
+	LFSR 0,0x0FF
+	LFSR 1,0x1FF
+CLEAR_LOOP
+	CLRF INDF0,a
+	CLRF INDF1,a
+	DECF FSR0L,F,a
+	DECF FSR1L,F,a
+	BNZ CLEAR_LOOP
+	CLRF INDF0,a
+	CLRF INDF1,a
 	
+;init variables and call subroutines
 	MOVLW 5
 	MOVWF CNST5	;set CNST5 to 5
 	
-	MOVLW 0FFH
-	MOVWF TRISA,a
+	BSF TRISA,4,a	;set RA4 to input
+	
+	BSF TRISA,0,a   ;configure RA0 as input
+	
+	MOVLW 0FH
+	MOVWF BSR,a
+	BSF ANSELA,0,b  ;set RA0 to analog
+	CLRF ANSELB,b   ;set PORTB to digital
+
+	MOVLW b'11110001'
+	MOVWF TRISB,a   ;set LEDs to output (RB0-RB3)
+	
+	;setup analog-digital converter
+	MOVLW b'10010111'	;right justified H-L bytes, aquisition time = 4 TAD, clock = internal oscillator
+	MOVWF ADCON2,a
+	MOVLW b'00000000'
+	MOVWF ADCON1,a	;references = Vdd and Vss
+	MOVLW b'00000001'
+	MOVWF ADCON0,a	;select channel 0 (AN0/RA0),turn on AD converter
 	
 ;start counter loop for random code, loop ends when button is pressed
 	LFSR 0,CODES ; each loop in the nest increments one CODE digit (starts at CODE1)
@@ -253,9 +269,8 @@ LOOP2
 LOOP3
 		    INCF FSR0L,F,a	;increment FSR0 to access CODE4
 LOOP4
-		    MOVF PORTA,W,a	;check if the button has been pressed
-		    ANDLW b'00010000'
-		    BNZ PRESSED		;if its pressed, exit the loop
+		    BTFSS PORTA,4,a	;check if the button has been pressed
+		    BRA PRESSED		;if its pressed, exit the loop
 		    MOVF INDF0,F,a
 		    BZ L4		;check if loop variable is 0, if it is jump to L4
 		    DECF INDF0,F,a	;if not 0, decrement loop var and continue looping
@@ -282,13 +297,33 @@ L1	MOVFF CNST5,INDF0
 	BRA LOOP1
 	
 PRESSED
-	MOVF PORTA,W,a	    ;wait for button release to start the game
-	ANDLW b'00010000'
-	BNZ PRESSED
+	BTFSS PORTA,4,a	    ;wait for button release to start the game
+	BRA PRESSED
 	
-;main game loop:
+;pack code
+	LFSR 0,CODES
+	MOVFF INDF0,pack_iH
+	INCF FSR0L,F,a
+	MOVFF INDF0,pack_iL
+	CALL PACK
+	MOVLW 4
+	MOVWF FSR0L,a
+	MOVFF pack_o,INDF0
+	MOVLW 2
+	MOVWF FSR0L,a
+	MOVFF INDF0,pack_iH
+	INCF FSR0L,F,a
+	MOVFF INDF0,pack_iL
+	CALL PACK
+	MOVLW 5
+	MOVWF FSR0L,a
+	MOVFF pack_o,INDF0
+	
+;MAIN GAME LOOP:
 	LFSR 0,GUESS	
 MAIN_LOOP
+	CALL GET_GUESS	    ;get a guess from the player
+	CALL PACK_GUESS	    ;store a packed version of the guess
 	CALL BLK_CNT	    ;count exact matches
 	CALL WT_CNT	    ;count color matches
 	CALL CLEAN_CODE	    ;clean markers off the CODE
@@ -310,28 +345,26 @@ PACK
 	ADDWF pack_o,F	    ;add high byte to output (O = 0xHL)
 	RETURN
 
-;subroutine unpacks the guess in the current FSR line
-UNPACK_GUESS
-	MOVLW GUESS_P
+;subroutine packs the guess in the current FSR0 line
+PACK_GUESS	
+	MOVFF INDF0,pack_iH
+	INCF FSR0L,F,a
+	MOVFF INDF0,pack_iL
+	CALL PACK	    ;move first two digits into pack input and call the function
+	MOVLW 3
+	ADDWF FSR0L,F,a	    
+	MOVFF pack_o,INDF0  ;store result
+	MOVLW 2
+	SUBWF FSR0L,F,a
+	MOVFF INDF0,pack_iH ;repeat same process as above for next two digits
+	INCF FSR0L,F,a
+	MOVFF INDF0,pack_iL
+	CALL PACK	    
+	MOVLW 2
 	ADDWF FSR0L,F,a
-	MOVFF INDF0,unpack_i
-	CALL UNPACK
-	MOVLW -4H
-	ADDWF FSR0L,F,a
-	MOVFF unpack_oH,INDF0
-	INCF FSR0L,F,a	
-	MOVFF unpack_oL,INDF0
-	MOVLW 4H
-	ADDWF FSR0L,F,a
-	MOVFF INDF0,unpack_i
-	CALL UNPACK
-	MOVLW -3H
-	ADDWF FSR0L,F,a
-	MOVFF unpack_oH,INDF0
-	INCF FSR0L,F,a	
-	MOVFF unpack_oL,INDF0
-	BCF FSR0L,0,a
-	BCF FSR0L,1,a
+	MOVFF pack_o,INDF0
+	MOVLW 0F0H
+	ANDWF FSR0L,F,a	    ;clear lower nibble of FSR0
 	RETURN
 	
 ;UNPACK subroutine
@@ -403,9 +436,87 @@ CONT_L	MOVF FSR1L,F,a
 	ADDWF FSR0L,F,a
 	MOVFF white_count,INDF0
 	MOVLW 0F0H
-	ANDWF FSR0L,F,a
+	ANDWF FSR0L,F,a	    ;clear lower nibble of FSR0
+	RETURN
+
+;subroutine to get a guess from the user
+GET_GUESS
+	MOVLW 4
+	MOVWF loop_var	;loop_var = 4 to get four guess digits
+AD_LOOP			;loop to read ADRESL constantly (analog value on potentiometer)
+	BSF ADCON0,GO	;start conversion
+CONVERT
+	BTFSC ADCON0,GO	;wait for conversion to finish
+	BRA CONVERT
+    
+	MOVFF ADRESH,pot_val+1  ;read result 
+	MOVFF ADRESL,pot_val
+    
+	CALL GET_NUM	    ;get a number (0-5) by dividing pot_val
+	CALL UPDATE_NUM	    ;if the number has changed, display the new value
+	
+	MOVLW 0
+	ADDLW 1		    ;set STATUS,Z to 0
+	BTFSS PORTA,4,a	    ;only select the number if the button is pressed
+	CALL SELECT_NUM
+	BNZ AD_LOOP	    ;keep looping
+	MOVLW 0F0H
+	ANDWF FSR0L,F,a	    ;clear lower nibble of FSR0
 	RETURN
 	
+SELECT_NUM
+	MOVFF display_digit,INDF0
+	INCF FSR0L,F,a
+	;move LCD cursor over by one
+RA4_WAIT
+	BTFSS PORTA,4,a
+	BRA RA4_WAIT
+	DECF loop_var,F,a
+	RETURN
+	
+;shorten analog value to 7 bits and divide by 22 to get a num between 0-5
+GET_NUM
+	CLRF display_digit,a
+	RRNCF pot_val,F,a	    ;rotate to go from 10 bits to 7 bits
+	RRNCF pot_val,F,a
+	RRNCF pot_val,F,a
+	MOVLW b'00011111'	    
+	ANDWF pot_val,F,a	    ;clear bits 5-7
+	BTFSC pot_val+1,0,a
+	BSF pot_val,5,a	    ;move high byte bits 0-1 to pot_val bits 5-6
+	BTFSC pot_val+1,1,a
+	BSF pot_val,6,a
+	;NOTE: we want bit 7 cleared in order to simplify division
+GN_LOOP
+	MOVLW D'22'
+	SUBWF pot_val,F,a	    ;count how many times 22 goes into pot_val (division)
+	BN EXIT_GN_LOOP
+	INCF display_digit,F,a	    ;store result of division in 'display_digit'
+	BRA GN_LOOP
+EXIT_GN_LOOP
+	RETURN
+
+;only update the number and write it to output if it has changed
+UPDATE_NUM
+	MOVF display_digit,W,a
+	CPFSEQ prev_dd,a
+	BRA DISPLAY_NUM
+EXIT_UPDATE_NUM
+	NOP
+	RETURN
+DISPLAY_NUM	;write display_digit to PORTB (RB1-RB3), TODO: change to LCD display
+	MOVWF prev_dd,a
+	BCF PORTB,1,a
+	BCF PORTB,2,a
+	BCF PORTB,3,a
+	BTFSC display_digit,0,a
+	BSF PORTB,1,a
+	BTFSC display_digit,1,a
+	BSF PORTB,2,a
+	BTFSC display_digit,2,a
+	BSF PORTB,3,a
+	BRA EXIT_UPDATE_NUM
+    
 ;CLEAN_CODE subroutine clear marks off of the code
 CLEAN_CODE
 	LFSR 1,CODES+4
