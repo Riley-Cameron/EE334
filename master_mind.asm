@@ -1,178 +1,23 @@
-;*******************************************************************************
-;                                                                              *
-;    Microchip licenses this software to you solely for use with Microchip     *
-;    products. The software is owned by Microchip and/or its licensors, and is *
-;    protected under applicable copyright laws.  All rights reserved.          *
-;                                                                              *
-;    This software and any accompanying information is for suggestion only.    *
-;    It shall not be deemed to modify Microchip?s standard warranty for its    *
-;    products.  It is your responsibility to ensure that this software meets   *
-;    your requirements.                                                        *
-;                                                                              *
-;    SOFTWARE IS PROVIDED "AS IS".  MICROCHIP AND ITS LICENSORS EXPRESSLY      *
-;    DISCLAIM ANY WARRANTY OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING  *
-;    BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS    *
-;    FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT. IN NO EVENT SHALL          *
-;    MICROCHIP OR ITS LICENSORS BE LIABLE FOR ANY INCIDENTAL, SPECIAL,         *
-;    INDIRECT OR CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA, HARM TO     *
-;    YOUR EQUIPMENT, COST OF PROCUREMENT OF SUBSTITUTE GOODS, TECHNOLOGY OR    *
-;    SERVICES, ANY CLAIMS BY THIRD PARTIES (INCLUDING BUT NOT LIMITED TO ANY   *
-;    DEFENSE THEREOF), ANY CLAIMS FOR INDEMNITY OR CONTRIBUTION, OR OTHER      *
-;    SIMILAR COSTS.                                                            *
-;                                                                              *
-;    To the fullest extend allowed by law, Microchip and its licensors         *
-;    liability shall not exceed the amount of fee, if any, that you have paid  *
-;    directly to Microchip to use this software.                               *
-;                                                                              *
-;    MICROCHIP PROVIDES THIS SOFTWARE CONDITIONALLY UPON YOUR ACCEPTANCE OF    *
-;    THESE TERMS.                                                              *
-;                                                                              *
-;*******************************************************************************
-;                                                                              *
-;    Filename:                                                                 *
-;    Date:                                                                     *
-;    File Version:                                                             *
-;    Author:                                                                   *
-;    Company:                                                                  *
-;    Description:                                                              *
-;                                                                              *
-;*******************************************************************************
-;                                                                              *
-;    Notes: In the MPLAB X Help, refer to the MPASM Assembler documentation    *
-;    for information on assembly instructions.                                 *
-;                                                                              *
-;*******************************************************************************
-;                                                                              *
-;    Known Issues: This template is designed for relocatable code.  As such,   *
-;    build errors such as "Directive only allowed when generating an object    *
-;    file" will result when the 'Build in Absolute Mode' checkbox is selected  *
-;    in the project properties.  Designing code in absolute mode is            *
-;    antiquated - use relocatable mode.                                        *
-;                                                                              *
-;*******************************************************************************
-;                                                                              *
-;    Revision History:                                                         *
-;                                                                              *
-;*******************************************************************************
-
-
-
-;*******************************************************************************
-; Processor Inclusion
-;
-; TODO Step #1 Open the task list under Window > Tasks.  Include your
-; device .inc file - e.g. #include <device_name>.inc.  Available
-; include files are in C:\Program Files\Microchip\MPLABX\mpasmx
-; assuming the default installation path for MPLAB X.  You may manually find
-; the appropriate include file for your device here and include it, or
-; simply copy the include generated by the configuration bits
-; generator (see Step #2).
-;
-;*******************************************************************************
-
-; TODO INSERT INCLUDE CODE HERE
+;INSERT INCLUDE CODE HERE
 #include p18f46k22.inc
-
-;*******************************************************************************
-;
-; TODO Step #2 - Configuration Word Setup
-;
-; The 'CONFIG' directive is used to embed the configuration word within the
-; .asm file. MPLAB X requires users to embed their configuration words
-; into source code.  See the device datasheet for additional information
-; on configuration word settings.  Device configuration bits descriptions
-; are in C:\Program Files\Microchip\MPLABX\mpasmx\P<device_name>.inc
-; (may change depending on your MPLAB X installation directory).
-;
-; MPLAB X has a feature which generates configuration bits source code.  Go to
-; Window > PIC Memory Views > Configuration Bits.  Configure each field as
-; needed and select 'Generate Source Code to Output'.  The resulting code which
-; appears in the 'Output Window' > 'Config Bits Source' tab may be copied
-; below.
-;
-;*******************************************************************************
-
-; TODO INSERT CONFIG HERE
-
-;*******************************************************************************
-;
-; TODO Step #3 - Variable Definitions
-;
-; Refer to datasheet for available data memory (RAM) organization assuming
-; relocatible code organization (which is an option in project
-; properties > mpasm (Global Options)).  Absolute mode generally should
-; be used sparingly.
-;
-; Example of using GPR Uninitialized Data
-;
-;   GPR_VAR        UDATA
-;   MYVAR1         RES        1      ; User variable linker places
-;   MYVAR2         RES        1      ; User variable linker places
-;   MYVAR3         RES        1      ; User variable linker places
-;
-;   ; Example of using Access Uninitialized Data Section (when available)
-;   ; The variables for the context saving in the device datasheet may need
-;   ; memory reserved here.
-;   INT_VAR        UDATA_ACS
-;   W_TEMP         RES        1      ; w register for context saving (ACCESS)
-;   STATUS_TEMP    RES        1      ; status used for context saving
-;   BSR_TEMP       RES        1      ; bank select used for ISR context saving
-;
-;*******************************************************************************
-
-; TODO PLACE VARIABLE DEFINITIONS GO HERE
 
 ;*******************************************************************************
 ; Reset Vector
 ;*******************************************************************************
 ;LIST P=PIC18F46K22
 RES_VECT  CODE    0x0000            ; processor reset vector
+  
+CBlock  0x300 ; -----  User RAM.Data in Access Bank 
+Count2, Count1, Count0   ; counter for Delay
+	; ------  for  LCD_p18LCD_Subs.asm  routines
+COUNTER		; counter for delay loops
+delay		; amount  of  delay for delay subroutines
+temp_wr		; temporary register for LCD written data
+temp_rd		; temporary register for data read from the LCD controller
+ptr_pos, ptr_count, cmd_byte	; used by LCD routines
+EndC
+	
     GOTO    START                   ; go to beginning of program
-
-;*******************************************************************************
-; TODO Step #4 - Interrupt Service Routines
-;
-; There are a few different ways to structure interrupt routines in the 8
-; bit device families.  On PIC18's the high priority and low priority
-; interrupts are located at 0x0008 and 0x0018, respectively.  On PIC16's and
-; lower the interrupt is at 0x0004.  Between device families there is subtle
-; variation in the both the hardware supporting the ISR (for restoring
-; interrupt context) as well as the software used to restore the context
-; (without corrupting the STATUS bits).
-;
-; General formats are shown below in relocatible format.
-;
-;------------------------------PIC16's and below--------------------------------
-;
-; ISR       CODE    0x0004           ; interrupt vector location
-;
-;     <Search the device datasheet for 'context' and copy interrupt
-;     context saving code here.  Older devices need context saving code,
-;     but newer devices like the 16F#### don't need context saving code.>
-;
-;     RETFIE
-;
-;----------------------------------PIC18's--------------------------------------
-;
-; ISRHV     CODE    0x0008
-;     GOTO    HIGH_ISR
-; ISRLV     CODE    0x0018
-;     GOTO    LOW_ISR
-;
-; ISRH      CODE                     ; let linker place high ISR routine
-; HIGH_ISR
-;     <Insert High Priority ISR Here - no SW context saving>
-;     RETFIE  FAST
-;
-; ISRL      CODE                     ; let linker place low ISR routine
-; LOW_ISR
-;       <Search the device datasheet for 'context' and copy interrupt
-;       context saving code here>
-;     RETFIE
-;
-;*******************************************************************************
-
-; TODO INSERT ISR HERE
 
 ;*******************************************************************************
 ; MAIN PROGRAM
@@ -182,9 +27,10 @@ MAIN_PROG CODE                      ; let linker place main program
 
 START
 
+
 ;define variables
  
-CODES EQU 0x100 ;store in bank 1 starting at 0x00
+CODES EQU 0x100 ;randomly generated code, store in bank 1 starting at 0x00
  
 ;each row of GUESS is: 0 = GUESS1, 1 = GUESS2, 2 = GUESS3, 3 = GUESS4, 
 ;4 = GUESS_PACKEDH, 5 = GUESS_PACKEDL, 7 = BLK_CNT, 8 = WT_CNT
@@ -203,20 +49,20 @@ unpack_i EQU 0x13	;input of UNPACK
 unpack_oL EQU 0x14	
 unpack_oH EQU 0x15	;high and low outputs of UNPACK
 CNST5 EQU 0x16		;constant 5, used for random number counter
-pot_val EQU 0x17	;A-D conversion of potentiometer signal (2-bytes)
+pot_val EQU 0x17	;A->D conversion of potentiometer signal (2-bytes)
 display_digit EQU 0x19	;value to be displayed
 prev_dd EQU 0x20	;previous display value (used to check if the display should be updated)
 loop_var EQU 0x21	;general loop index 
  
 ;SFRs
-PORTA EQU 0xF80 ;SW2 button (RA4 = PORTA[4])
-TRISA EQU 0xF92	;set I/O of portA
-BSR   EQU 0xFE0 ;bank select register
-WREG  EQU 0xFE8 ;working register
-FSR0L EQU 0xFE9	;Low byte of file select register 0
-INDF0 EQU 0xFEF	;indirect file register 0
-FSR1L EQU 0xFE1
-INDF1 EQU 0xFE7
+;PORTA EQU 0xF80 ;SW2 button (RA4 = PORTA[4])
+;TRISA EQU 0xF92	;set I/O of portA
+;BSR   EQU 0xFE0 ;bank select register
+;WREG  EQU 0xFE8 ;working register
+;FSR0L EQU 0xFE9	;Low byte of file select register 0
+;INDF0 EQU 0xFEF	;indirect file register 0
+;FSR1L EQU 0xFE1
+;INDF1 EQU 0xFE7
  
 ;define constants
 unpack_mask EQU 0FH
@@ -237,6 +83,11 @@ CLEAR_LOOP
 	CLRF INDF1,a
 	
 ;init variables and call subroutines
+	CALL	LCDInit		; Initialize PORTA, PORTD, and LCD Module
+	CALL	LCDLine_1	;move cursor to line 1
+	
+	CALL DELAY		;wait 0.1 seconds
+	
 	MOVLW 5
 	MOVWF CNST5	;set CNST5 to 5
 	
@@ -250,15 +101,17 @@ CLEAR_LOOP
 	CLRF ANSELB,b   ;set PORTB to digital
 
 	MOVLW b'11110001'
-	MOVWF TRISB,a   ;set LEDs to output (RB0-RB3)
+	MOVWF TRISB,a   ;set LEDs to output (RB0-RB3) -- No longer required
 	
 	;setup analog-digital converter
-	MOVLW b'10010111'	;right justified H-L bytes, aquisition time = 4 TAD, clock = internal oscillator
+	MOVLW b'10010111'   ;right justified H-L bytes, aquisition time = 4 TAD, clock = internal oscillator
 	MOVWF ADCON2,a
 	MOVLW b'00000000'
-	MOVWF ADCON1,a	;references = Vdd and Vss
+	MOVWF ADCON1,a	    ;voltage references = Vdd and Vss
 	MOVLW b'00000001'
-	MOVWF ADCON0,a	;select channel 0 (AN0/RA0),turn on AD converter
+	MOVWF ADCON0,a	    ;select channel 0 (AN0/RA0),turn on AD converter
+
+	CALL DISPLAY_WELCOME	;write welcome message to the LCD
 	
 ;start counter loop for random code, loop ends when button is pressed
 	LFSR 0,CODES ; each loop in the nest increments one CODE digit (starts at CODE1)
@@ -322,16 +175,30 @@ PRESSED
 ;MAIN GAME LOOP:
 	LFSR 0,GUESS	
 MAIN_LOOP
+	CALL DISPLAY_GET_GUESS	;show player info on how to guess
 	CALL GET_GUESS	    ;get a guess from the player
 	CALL PACK_GUESS	    ;store a packed version of the guess
 	CALL BLK_CNT	    ;count exact matches
 	CALL WT_CNT	    ;count color matches
 	CALL CLEAN_CODE	    ;clean markers off the CODE
+	
+	;check if win condition is true:
+	MOVLW 4
+	CPFSEQ black_count
+	BRA NO_WIN
+	CALL DISPLAY_WIN    ;if it is, display 'You Win!'
+	
+NO_WIN 	;else
+	CALL DISPLAY_BW	    ;show black and white counts from last guess to player
+	
 	MOVLW 10H
 	ADDWF FSR0L,F,a	    ;increment to next guess
 	MOVF FSR0L,W,a
 	SUBLW 0D0H	    ;check if loop is at 12 yet (0CH)
 	BNZ MAIN_LOOP	    ;break after 12 iterations
+	
+	;if player fails:
+	CALL DISPLAY_LOSS   ;broken loop means the player used all 12 guesses, display 'You Lost'
 	
 	;see bank 0 for code and processed guesses
 	GOTO $
@@ -441,8 +308,11 @@ CONT_L	MOVF FSR1L,F,a
 
 ;subroutine to get a guess from the user
 GET_GUESS
+	
 	MOVLW 4
 	MOVWF loop_var	;loop_var = 4 to get four guess digits
+	MOVF display_digit,W
+	CALL DISPLAY_NUM
 AD_LOOP			;loop to read ADRESL constantly (analog value on potentiometer)
 	BSF ADCON0,GO	;start conversion
 CONVERT
@@ -460,18 +330,26 @@ CONVERT
 	BTFSS PORTA,4,a	    ;only select the number if the button is pressed
 	CALL SELECT_NUM
 	BNZ AD_LOOP	    ;keep looping
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
 	MOVLW 0F0H
 	ANDWF FSR0L,F,a	    ;clear lower nibble of FSR0
 	RETURN
-	
+
+;called when user has selected a digit for their guess
 SELECT_NUM
-	MOVFF display_digit,INDF0
-	INCF FSR0L,F,a
-	;move LCD cursor over by one
+	MOVFF display_digit,INDF0   ;stored displayed number in GUESS
+	INCF FSR0L,F,a		    ;move to next GUESS digit
 RA4_WAIT
-	BTFSS PORTA,4,a
+	BTFSS PORTA,4,a		    ;wait for button release
 	BRA RA4_WAIT
-	DECF loop_var,F,a
+	MOVLW 14H	
+	MOVWF temp_wr
+	CALL i_write		    ;move the cursor over by one
+	MOVF display_digit,W
+	CALL DISPLAY_NUM	    ;display current selection in next digit position
+	DECF loop_var,F,a	    ;decrement loop var (after 4 selections it breaks the loop)
 	RETURN
 	
 ;shorten analog value to 7 bits and divide by 22 to get a num between 0-5
@@ -500,22 +378,20 @@ EXIT_GN_LOOP
 UPDATE_NUM
 	MOVF display_digit,W,a
 	CPFSEQ prev_dd,a
-	BRA DISPLAY_NUM
+	CALL DISPLAY_NUM	;display number if previous and current digit are different
 EXIT_UPDATE_NUM
 	NOP
 	RETURN
-DISPLAY_NUM	;write display_digit to PORTB (RB1-RB3), TODO: change to LCD display
+	
+DISPLAY_NUM	;write display_digit to LCD display
 	MOVWF prev_dd,a
-	BCF PORTB,1,a
-	BCF PORTB,2,a
-	BCF PORTB,3,a
-	BTFSC display_digit,0,a
-	BSF PORTB,1,a
-	BTFSC display_digit,1,a
-	BSF PORTB,2,a
-	BTFSC display_digit,2,a
-	BSF PORTB,3,a
-	BRA EXIT_UPDATE_NUM
+	ADDLW 30H	    ;adding 30H to a 0-9 digit gives its ASCII code
+	MOVWF temp_wr
+	CALL d_write	    ;display the number
+	MOVLW 10H
+	MOVWF temp_wr
+	CALL i_write	    ;keep the cursor in the same position (it usually increments automatically after writing)
+	RETURN
     
 ;CLEAN_CODE subroutine clear marks off of the code
 CLEAN_CODE
@@ -527,6 +403,470 @@ CLEAN_LOOP
 	MOVF FSR1L
 	BNZ CLEAN_LOOP
 	RETURN
+
+; ---------------- Wait a while = 1 x256 x256 x3 uSec = 0.1 sec
+DELAY
+	movLW	1
+	movWF	Count2
+	clrF	Count1
+	clrF	Count0
+WLoo	
+	decFsZ	Count0
+	bra		WLoo
+	decFsZ	Count1
+	bra		WLoo
+	decFsZ	Count2
+	bra		WLoo	
+        RETURN
 	
+;initialize the LCD for getting a guess from the player
+DISPLAY_GET_GUESS
+	MOVLW 1H
+	MOVWF temp_wr
+	CALL i_write	;clear LCD
+	
+	CALL DELAY
+	
+	CALL LCDLine_1
+	
+	MOVLW 0EH
+	MOVWF temp_wr
+	CALL i_write	;show cursor
+	
+	MOVLW A'R'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'A'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'0'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'+'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'/'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'S'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'W'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'2'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'N'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'e'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'x'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A't'
+	MOVWF temp_wr
+	CALL d_write
+	
+	CALL LCDLine_2
+	
+	RETURN
+
+;show player the black and white values for their guess
+DISPLAY_BW
+	CALL LCDLine_1
+	
+	MOVLW A'B'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVF black_count,W
+	ADDLW 30H
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'W'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVF white_count,W
+	ADDLW 30H
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW 0CH
+	MOVWF temp_wr
+	CALL i_write
+	
+BW_WAIT_SW2		;keep display the same until SW2 is pressed
+	BTFSC PORTA,4,a
+	BRA BW_WAIT_SW2
+BW_WAIT_RELEASE
+	BTFSS PORTA,4,a
+	BRA BW_WAIT_RELEASE
+	RETURN
+
+;display welcome message:
+DISPLAY_WELCOME
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'M'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'A'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'S'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'T'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'E'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'R'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'M'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'I'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'N'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'D'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'-'
+	MOVWF temp_wr
+	CALL d_write
+	
+	CALL LCDLine_2
+	
+	MOVLW 14H
+	MOVWF temp_wr
+	CALL i_write
+	
+	MOVLW 14H
+	MOVWF temp_wr
+	CALL i_write
+	
+	MOVLW 14H
+	MOVWF temp_wr
+	CALL i_write
+	
+	MOVLW A'S'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'W'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'2'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'S'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A't'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'a'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'r'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A't'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW 0CH
+	MOVWF temp_wr
+	CALL i_write
+	
+	RETURN
+
+;display win message
+DISPLAY_WIN
+	MOVLW 1
+	MOVWF temp_wr
+	CALL i_write
+	CALL DELAY
+	
+	CALL LCDLine_1
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'Y'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'O'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'U'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'W'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'O'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'N'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'!'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'!'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'!'
+	MOVWF temp_wr
+	CALL d_write
+	
+	RETURN
+	
+;display loss message
+DISPLAY_LOSS
+	MOVLW 1
+	MOVWF temp_wr
+	CALL i_write
+	CALL DELAY
+	
+	CALL LCDLine_1
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'Y'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'o'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'u'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'L'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'o'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A's'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A't'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'('
+	MOVWF temp_wr
+	CALL d_write
+	
+	CALL LCDLine_2
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'C'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'O'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'D'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A'E'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A':'
+	MOVWF temp_wr
+	CALL d_write
+	
+	MOVLW A' '
+	MOVWF temp_wr
+	CALL d_write
+	
+	LFSR 1,CODES
+	MOVF INDF1,W
+	ADDLW 30H
+	MOVWF temp_wr
+	CALL d_write
+	
+	INCF FSR1L,F
+	MOVF INDF1,W
+	ADDLW 30H
+	MOVWF temp_wr
+	CALL d_write
+	
+	INCF FSR1L,F
+	MOVF INDF1,W
+	ADDLW 30H
+	MOVWF temp_wr
+	CALL d_write
+	
+	INCF FSR1L,F
+	MOVF INDF1,W
+	ADDLW 30H
+	MOVWF temp_wr
+	CALL d_write
+	
+	RETURN
+	
+;include file for the LCD subroutines
+#Include LCD_p18LCD_Subs_New.asm  ; Contains:
+; --- LCDInit:		>> initialize
+; --- LCDLine_1:	>> Cursor to Line_1
+; --- LCDLine_2:	>> Cursor to to Line_2
+; --- i_write:  	>> instruction write
+; --- d_write:		>> data        write
 	
     END
